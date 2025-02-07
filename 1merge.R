@@ -13,6 +13,7 @@ library("patchwork")
 library("tidyverse")
 
 rm(list = ls())
+setwd("C:/Users/Mardream/OneDrive/Desktop/Rdata")
 setwd("/Users/mardream_75/Desktop/Rdata")
 
 mtdm.data <- Read10X(data.dir = "./M-TDM/filtered_feature_bc_matrix")
@@ -33,6 +34,11 @@ ptdm[["percent.mt"]] <- PercentageFeatureSet(ptdm, pattern = "^mt-")
 #质控降维标准化
 mtdm <- subset(mtdm,subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
 ptdm <- subset(ptdm,subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+
+#查看剩余细胞量（across xxx）
+mtdm
+ptdm
+
 mtdm <- NormalizeData(mtdm, normalization.method = "LogNormalize", scale.factor = 10000)
 ptdm <- NormalizeData(ptdm, normalization.method = "LogNormalize", scale.factor = 10000)
 mtdm <- FindVariableFeatures(mtdm, selection.method = "vst", nfeatures = 2000)
@@ -47,6 +53,7 @@ tdm.intergrated <- IntegrateData(anchorset = tdm.anchors, dims = 1:20)
 tdm <- tdm.intergrated
 
 #DefaultAssay(tdm) <- "integrated"
+#应该用RNA
 DefaultAssay(tdm) <- "RNA"
 tdm <- ScaleData(tdm, features = rownames(tdm))
 tdm <- RunPCA(tdm, npcs = 30, verbose = FALSE)
@@ -82,7 +89,6 @@ tdm <- JoinLayers(tdm)
 tdm.markers <- FindAllMarkers(tdm, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25) 
 library(dplyr)
 top10 <- tdm.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
-
 DoHeatmap(tdm, features = top10$gene) + NoLegend()
 
 #注释小提琴图
@@ -109,5 +115,13 @@ tdmrename <- RenameIdents(tdmrename, new.cluster.ids)
 DimPlot(tdmrename, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
 DimPlot(tdmrename, reduction = "tsne", label = TRUE, pt.size = 0.5) + NoLegend()
 
-saveRDS(tdmrename,file="tdm-T.rds")
-saveRDS(tdm,file="tdm-original-RNA.rds")
+saveRDS(tdmrename,file="tdm-241219-T.rds")
+saveRDS(tdm,file="tdm-241219-original-RNA.rds")
+
+#再细分用
+new.cluster.ids <- c("Nature Killer", "B","Neutrophil",
+                     "T","T","Red Blood",
+                     "UNKNOWN","T","CD8 T",
+                     "Macrophage","T","Treg",
+                     "T","Plasma","T helper",
+                     "Th17")
