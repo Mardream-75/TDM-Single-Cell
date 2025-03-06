@@ -4,14 +4,16 @@ BiocManager::install("RColorBrewer")
 BiocManager::install("magrittr")
 BiocManager::install("patchwork")
 BiocManager::install("tidydr")
-library(devtools)
+
 install.packages('NMF')
+install.packages('devtools')
 BiocManager::install('BiocNeighbors')
 devtools::install_github("jokergoo/circlize")
 devtools::install_github("jokergoo/ComplexHeatmap")
 devtools::install_github('immunogenomics/presto')
 devtools::install_github("jinworks/CellChat",type="binary")
 
+library(devtools)
 library(Seurat)
 # library(SeuratData)
 library(RColorBrewer)
@@ -24,18 +26,21 @@ library(tidydr)
 
 setwd("/Users/mardream_75/Desktop/Rdata")
 setwd("C:/Users/Mardream/OneDrive/Desktop/Rdata")
-tdm <- readRDS("tdm-241219-cd4cd8.rds")
+tdm <- readRDS("tdm-25-treg.rds")
 
 #新增cell_type后续用
 tdm$seurat_clusters <- as.factor(tdm$seurat_clusters)
-new.cluster.ids <- c("B", "B","Neutrophil","B","CD4+ T","CD4+ T","B",
-                     "Red Blood","CD8+ T","B","Red Blood","Nature Killer","Macrophage",
-                     "Plasma","Macrophage","Unknown","T",
-                     "Unknown","Neutrophil","Red Blood","Unknown")
+new.cluster.ids <- c("B", "B","Neutrophil","B","CD4+ T","Treg","Lymphocyte",
+                     "Erythroid","CD8+ T","B","NK","DC","Monocyte",
+                     "Plasma","Eosinophil","Erythroid","Th",
+                     "Unknown","Neutrophil","Erythroid","Unknown")
 cluster_mapping <- setNames(new.cluster.ids, seq_along(new.cluster.ids) - 1)
 cell_type_vector <- cluster_mapping[as.character(tdm$seurat_clusters)]
 cell_type_df <- data.frame(cell_type = cell_type_vector, row.names = colnames(tdm))
 tdm <- AddMetaData(tdm, metadata = cell_type_df)
+
+#剔除低质量Unknown
+tdm <- subset(tdm, subset = cell_type != "Unknown")  # 确保列名和值正确
 
 View(tdm@meta.data)
 
@@ -163,32 +168,37 @@ netVisual_bubble(ptdm.cellchat,
                  remove.isolate = FALSE,
                  font.size = 14)
 
+mtdm.cellchat <- readRDS("mtdm.cellchat.rds")
+ptdm.cellchat <- readRDS("ptdm.cellchat.rds")
 
-#合并
+#去除亚类
+idents_to_keep <- c("B", "Neutrophil", "CD4+ T", "CD8+ T", "Treg", "Plasma", "NK", "DC", "Monocyte", "Eosinophil", "Th", "Erythroid")
+ptdm.cellchat <- subsetCellChat(ptdm.cellchat, idents.use = idents_to_keep)
 object.list <- list("M-TDM" = mtdm.cellchat, "P-TDM" = ptdm.cellchat)
 cellchat <- mergeCellChat(object.list, add.names = names(object.list))
 
-#比较 c(2,1)换顺序，这样红色才是实验组
-gg1 <- compareInteractions(cellchat, show.legend = F, group = c(2,1))
-gg2 <- compareInteractions(cellchat, show.legend = F, group = c(2,1), measure = "weight")
+#
+gg1 <- compareInteractions(cellchat, show.legend = F, group = c(1,2)) 
+gg2 <- compareInteractions(cellchat, show.legend = F, group = c(1,2), measure = "weight")
 gg1 + gg2
 dev.off()
 
 par(mfrow = c(1,2), xpd=TRUE)
-netVisual_diffInteraction(cellchat, weight.scale = T, comparison = c(2,1))
-netVisual_diffInteraction(cellchat, weight.scale = T, comparison = c(2,1), measure = "weight")
+netVisual_diffInteraction(cellchat, weight.scale = T, comparison = c(1,2))
+netVisual_diffInteraction(cellchat, weight.scale = T, comparison = c(1,2), measure = "weight")
 dev.off()
 
 #差异热图
 par(mfrow = c(1,1))
-h1 <- netVisual_heatmap(cellchat, comparison = c(2,1))
-h2 <- netVisual_heatmap(cellchat, comparison = c(2,1), measure = "weight")
+h1 <- netVisual_heatmap(cellchat, comparison = c(1,2))
+h2 <- netVisual_heatmap(cellchat, comparison = c(1,2), measure = "weight")
 h1+h2
 
 #保守和特异性信号通路
 gg1 <- rankNet(cellchat, mode = "comparison", stacked = T, do.stat = T, comparison = c(2,1))
 gg2 <- rankNet(cellchat, mode = "comparison", stacked = F, do.stat = T, comparison = c(2,1))
 gg1 + gg2
+
 
 #弦图改热图，直观
 library(pheatmap)
@@ -197,3 +207,15 @@ pheatmap(diff.count,
          treeheight_col = "0", treeheight_row = "0",
          cluster_rows = T,
          cluster_cols = T)
+
+ptdm.cellchat <- netAnalysis_computeCentrality(ptdm.cellchat, slot.name = "netP")
+ht1 <- netAnalysis_signalingRole_heatmap(ptdm.cellchat, pattern = "outgoing", font.size = 5)
+ht2 <- netAnalysis_signalingRole_heatmap(ptdm.cellchat, pattern = "incoming", font.size = 5)
+ht1 + ht2
+
+levels(ptdm.cellchat@idents)
+
+# show all the significant interactions (L-R pairs)
+#需要指定受体细胞和配体细胞
+p = netVisual_bubble(ptdm.cellchat, sources.use = c("B","DC","Treg","CD4+ T"), 
+                     targets.use = c("B","DC","Treg","CD4+ T"), remove.isolate = FALSE)

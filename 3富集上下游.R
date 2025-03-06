@@ -42,7 +42,20 @@ erich2plot <- function(data1, data2, custom_title) {
          x = "Richfactor",
          title = custom_title,
          subtitle = "Enrichment Process")
-  pr <- pr + theme_bw()
+  pr <- pr + theme_bw() +
+    theme(
+      plot.title = element_text(size = 16, face = "bold"),  # 调整标题字体大小
+      axis.title.x = element_text(size = 14),  # 调整X轴标题字体大小
+      axis.title.y = element_text(size = 14),  # 调整Y轴标题字体大小
+      axis.text.x = element_text(size = 12),  # 调整X轴刻度字体大小
+      axis.text.y = element_text(size = 16),  # 调整Y轴刻度字体大小
+      legend.title = element_text(size = 12),  # 调整图例标题字体大小
+      legend.text = element_text(size = 10)  # 调整图例文本字体大小
+    ) +
+    guides(
+      size = guide_legend(order = 1),  
+      color = guide_legend(order = 2) 
+    )
   pr
 }
 
@@ -105,9 +118,15 @@ go2plot <- function(data1, data2, custom_title) {
     theme(
       panel.border = element_rect(color = "black", fill = NA, size = 0.5),
       strip.text.y = element_text(angle = 0),                              
-      axis.text.y = element_text(size = 8),                               
       panel.spacing = unit(0.5, "lines"),
-      strip.background = element_rect(fill = "grey")
+      strip.background = element_rect(fill = "grey"),
+      plot.title = element_text(size = 16, face = "bold"),  # 调整标题字体大小
+      axis.title.x = element_text(size = 14),  # 调整X轴标题字体大小
+      axis.title.y = element_text(size = 14),  # 调整Y轴标题字体大小
+      axis.text.x = element_text(size = 5),  # 调整X轴刻度字体大小
+      axis.text.y = element_text(size = 12),  # 调整Y轴刻度字体大小
+      legend.title = element_text(size = 12),  # 调整图例标题字体大小
+      legend.text = element_text(size = 10)  # 调整图例文本字体大小
     ) +
     labs(
       x = "Gene Ratio",                                                   
@@ -116,15 +135,25 @@ go2plot <- function(data1, data2, custom_title) {
       color = "Direction",
       title = custom_title
     ) +
-    scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) 
+    scale_x_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    guides(
+      size = guide_legend(order = 1),  
+      color = guide_legend(order = 2) 
+    )
   ggsave(paste0('./25年/富集基因/GO/',custom_title,'-dot.pdf'), plot = p, device = "pdf", width = 10, height = 10, dpi = 600, limitsize = FALSE)
 }
 
 #上下调各100个基因
 mykegg <- function(marker,title){
   marker$foldChange <- 2^marker$avg_log2FC
-  upgene <- marker %>% top_n(n = 100, wt = avg_log2FC) %>% rownames()
-  dngene <- marker %>% top_n(n = -100, wt = avg_log2FC) %>% rownames()
+  upgene <- marker %>%
+    filter(avg_log2FC > 0, p_val_adj < 0.05) %>%
+    top_n(n = 100, wt = avg_log2FC) %>%
+    rownames()
+  dngene <- marker %>%
+    filter(avg_log2FC < 0, p_val_adj < 0.05) %>%
+    top_n(n = -100, wt = avg_log2FC) %>%
+    rownames()
   foldChange_up <- marker$foldChange[rownames(marker) %in% upgene]
   foldChange_dn <- marker$foldChange[rownames(marker) %in% dngene]
   foldChange_vector <- c(foldChange_up, foldChange_dn)
@@ -147,9 +176,12 @@ mykegg <- function(marker,title){
   dnekegg@result$Description <- gsub(" - Mus musculus \\(house mouse\\)", "", dnekegg@result$Description)
   write.csv(upekegg@result, paste0('./25年/富集基因/',title,'-up-kegg.result.csv'))
   write.csv(dnekegg@result, paste0('./25年/富集基因/',title,'-down-kegg.result.csv'))
-  print(erich2plot(upekegg@result,dnekegg@result,title))
+  p <- erich2plot(upekegg@result,dnekegg@result,title)
+  ggsave(paste0('./25年/富集基因/KEGG/',title,'-dot.pdf'), plot = p, device = "pdf", width = 10, height = 10, dpi = 600, limitsize = FALSE)
   # 合并上调和下调基因的富集结果
-  ekegg_result <- rbind(upekegg@result, dnekegg@result)
+  top_upkegg <- head(upekegg@result[order(upekegg@result$pvalue), ], 10)
+  top_dnkegg <- head(dnekegg@result[order(dnekegg@result$pvalue), ], 10)
+  ekegg_result <- rbind(top_upkegg, top_dnkegg)
   ekegg <- new("enrichResult", result = ekegg_result)
   ekegg@gene <- unique(c(upekegg@gene, dnekegg@gene))
   # 合并基因数据框
@@ -157,24 +189,31 @@ mykegg <- function(marker,title){
   # 提取富集分析中的基因 ID
   common_genes <- intersect(ekegg@gene, gene.df$ENTREZID)
   # 对数处理
-  foldChange_vector <- log2(foldChange_vector)
+  #foldChange_vector <- log2(foldChange_vector)
   #自行修改最大值以美化图表
   foldChange_vector <- pmin(foldChange_vector, 2.5)
-  cnetplot(ekegg,
+  p <- cnetplot(ekegg,
            categorySize = "pvalue",
            foldChange = foldChange_vector,
            showCategory = 20,
-           max.overlaps = 50) +
-    scale_color_gradient2(name = "log2(Fold Change)",
+           max.overlaps = 50,
+           layout = "fr") +
+    scale_color_gradient2(name = "Fold Change",
                           low = "green", mid = "grey", high = "red",
                           midpoint = 1, limits = c(0,2.5), oob = scales::oob_keep)
-  # 自定义颜色渐变，超出范围的颜色设置为红色
+  ggsave(paste0('./25年/富集基因/KEGG/',title,'-cnetplot.pdf'), plot = p, device = "pdf", width = 10, height = 10, dpi = 600, limitsize = FALSE)
 }
 
 mygo <- function(marker,title){
   marker$foldChange <- 2^marker$avg_log2FC
-  upgene <- marker %>% top_n(n = 100, wt = avg_log2FC) %>% rownames()
-  dngene <- marker %>% top_n(n = -100, wt = avg_log2FC) %>% rownames()
+  upgene <- marker %>%
+    filter(avg_log2FC > 0, p_val_adj < 0.05) %>%
+    top_n(n = 100, wt = avg_log2FC) %>%
+    rownames()
+  dngene <- marker %>%
+    filter(avg_log2FC < 0, p_val_adj < 0.05) %>%
+    top_n(n = -100, wt = avg_log2FC) %>%
+    rownames()
   upgene.df <- bitr(upgene,fromType = "SYMBOL", toType=c("ENTREZID","ENSEMBL"), OrgDb = org.Mm.eg.db)
   dngene.df <- bitr(dngene,fromType = "SYMBOL", toType=c("ENTREZID","ENSEMBL"), OrgDb = org.Mm.eg.db)
   foldChange_up <- marker$foldChange[rownames(marker) %in% upgene]
@@ -192,7 +231,9 @@ mygo <- function(marker,title){
   write.csv(dnggoMF@result, paste0('./25年/富集基因/',title,'-down-go.result.csv'))
   go2plot(upggoMF@result,dnggoMF@result,title)
   # 合并上调和下调基因的富集结果
-  ggoMF_result <- rbind(upggoMF@result, dnggoMF@result)
+  top_upggoMF <- head(upggoMF@result[order(upggoMF@result$pvalue), ], 10)
+  top_dnggoMF <- head(dnggoMF@result[order(dnggoMF@result$pvalue), ], 10)
+  ggoMF_result <- rbind(top_upggoMF, top_dnggoMF)
   ggoMF <- new("enrichResult", result = ggoMF_result)
   ggoMF@gene <- unique(c(upggoMF@gene, dnggoMF@gene))
   # 合并基因数据框
@@ -208,7 +249,7 @@ mygo <- function(marker,title){
            foldChange = foldChange_vector,
            showCategory = 15,
            max.overlaps = 50,
-           layout = "kk") +
+           layout = "fr") +
     scale_color_gradient2(name = "Fold Change",
                           low = "green", mid = "grey", high = "red",
                           midpoint = 1, limits = c(0,2.5), oob = scales::oob_keep)
@@ -218,13 +259,30 @@ mygo <- function(marker,title){
 #读入文件
 cd4.marker <- read.csv('./25年/差异基因/CD4+ T.CSV',row.names = 1)
 cd8.marker <- read.csv('./25年/差异基因/CD8+ T.CSV',row.names = 1)
-mac.marker <- read.csv('./25年/差异基因/Macrophage.CSV',row.names = 1)
-b.marker <- read.csv('./25年/差异基因/B.CSV',row.names = 1)
+treg.marker <- read.csv('./25年/差异基因/Treg.CSV',row.names = 1)
+th.marker <- read.csv('./25年/差异基因/Th.CSV',row.names = 1)
 mykegg(cd4.marker,"CD4+ T")
 mykegg(cd8.marker,"CD8+ T")
-mykegg(mac.marker,"Macrophage")
-mykegg(b.marker,"B")
+mykegg(treg.marker,"Treg")
+mykegg(th.marker,"Th")
 mygo(cd4.marker,"CD4+ T")
 mygo(cd8.marker,"CD8+ T")
-mygo(mac.marker,"Macrophage")
-mygo(b.marker,"B")
+mygo(treg.marker,"Treg")
+mygo(th.marker,"Th")
+
+ekegg <- read.csv('./25年/富集基因/CD4+ T-up-go.result.csv')
+
+BiocManager::install("pathview")
+library("pathview")
+
+pathview(
+  gene.data = ekegg,     # 基因表达数据向量
+  pathway.id = "mmu04210",   # KEGG 通路 ID（例如细胞周期通路 hsa04110）
+  species = "mmu",           # 物种缩写（人类为 hsa，小鼠为 mmu）
+  gene.idtype = "entrez",    # 输入数据的基因 ID 类型（需与 KEGG 匹配）
+  kegg.dir = ".",            # 保存 KEGG XML 文件的目录（默认当前目录）
+  out.suffix = "kegg",     # 输出文件名的后缀（如生成 hsa04110.custom.png）
+  plot.col.key = TRUE,       # 显示颜色图例
+  limit = list(gene = 2),    # 颜色映射范围（根据 Fold Change 设定）
+  bins = 10                  # 颜色分段数
+)

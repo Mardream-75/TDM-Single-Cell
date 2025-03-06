@@ -88,8 +88,8 @@ p3|p4
 tdm <- JoinLayers(tdm)
 tdm.markers <- FindAllMarkers(tdm, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25) 
 library(dplyr)
-top10 <- tdm.markers %>% group_by(cluster) %>% top_n(n = 10, wt = avg_log2FC)
-DoHeatmap(tdm, features = top10$gene) + NoLegend()
+top15 <- tdm.markers %>% group_by(cluster) %>% top_n(n = 15, wt = avg_log2FC)
+DoHeatmap(tdm, features = top10$gene, size = 3, angle = -50, hjust = 0.8) + scale_fill_gradientn(colors = c("white","grey","firebrick3"))
 
 #注释小提琴图
 VlnPlot(tdm, features = top10$gene[1:20],pt.size=0)
@@ -99,10 +99,10 @@ DimPlot(tdm,label = T,reduction = "tsne")
 #http://117.50.127.228/CellMarker/
 tdmrename <- tdm
 levels(tdmrename)
-new.cluster.ids <- c("B", "B","Neutrophil","B","CD4+ T","CD4+ T","B",
-                     "Red Blood","CD8+ T","B","Red Blood","Nature Killer","Macrophage",
-                     "Plasma","Macrophage"," ","T",
-                     " ","Neutrophil","Red Blood"," ")
+new.cluster.ids <- c("B", "B","Neutrophil","B","CD4+ T","Treg","Lymphocyte",
+                     "Erythroid","CD8+ T","B","NK","DC","Monocyte",
+                     "Plasma","Eosinophil","Erythroid","Th",
+                     "Unknown","Neutrophil","Erythroid","Unknown")
 
 new.cluster.ids <- c("B", "B","Neutrophil","B","T","T","B",
                      "Red Blood","T","B","Red Blood","Nature Killer","Macrophage",
